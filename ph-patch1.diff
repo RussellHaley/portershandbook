@@ -1,0 +1,784 @@
+Index: Makefile
+===================================================================
+--- Makefile	(revision 51003)
++++ Makefile	(working copy)
+@@ -20,6 +20,9 @@
+ 
+ # XML content
+ SRCS=  book.xml
++SRCS+= ph-introduction/chapter.xml
++SRCS+= ph-build-process/chapter.xml
++SRCS+= ph-working-with-files/chapter.xml
+ SRCS+= porting-why/chapter.xml
+ SRCS+= new-port/chapter.xml
+ SRCS+= quick-porting/chapter.xml
+Index: book.xml
+===================================================================
+--- book.xml	(revision 51003)
++++ book.xml	(working copy)
+@@ -66,8 +66,14 @@
+ 
+   &chap.porting-why;
+   &chap.new-port;
++
++  &chap.ph-introduction;
++  &chap.ph-build-process;
++  &chap.ph-working-with-files;  
++
+   &chap.quick-porting;
+   &chap.slow-porting;
++
+   &chap.makefiles;
+   &chap.special;
+   &chap.plist;
+Index: chapters.ent
+===================================================================
+--- chapters.ent	(revision 51003)
++++ chapters.ent	(working copy)
+@@ -10,6 +10,9 @@
+      $FreeBSD$
+ -->
+ 
++<!ENTITY chap.ph-introduction		SYSTEM "ph-introduction/chapter.xml">
++<!ENTITY chap.ph-build-process		SYSTEM "ph-build-process/chapter.xml">
++<!ENTITY chap.ph-working-with-files	SYSTEM "ph-working-with-files/chapter.xml">
+ <!ENTITY chap.porting-why	SYSTEM "porting-why/chapter.xml">
+ <!ENTITY chap.new-port		SYSTEM "new-port/chapter.xml">
+ <!ENTITY chap.quick-porting	SYSTEM "quick-porting/chapter.xml">
+Index: ph-build-process/Makefile
+===================================================================
+--- ph-build-process/Makefile	(nonexistent)
++++ ph-build-process/Makefile	(working copy)
+@@ -0,0 +1,15 @@
++#
++# Build the Porters Handbook with just the content from this chapter.
++#
++# $FreeBSD: head/en_US.ISO8859-1/books/porters-handbook/slow-porting/Makefile 43840 2014-02-09 01:50:53Z trhodes $
++#
++
++CHAPTERS= 	ph-build-process/chapter.xml
++
++VPATH=		..
++
++MASTERDOC=	${.CURDIR}/../${DOC}.${DOCBOOKSUFFIX}
++
++DOC_PREFIX?= 	${.CURDIR}/../../../..
++
++.include "../Makefile"
+Index: ph-build-process/chapter.xml
+===================================================================
+--- ph-build-process/chapter.xml	(nonexistent)
++++ ph-build-process/chapter.xml	(working copy)
+@@ -0,0 +1,411 @@
++<?xml version="1.0" encoding="iso-8859-1"?>
++<!--
++     The FreeBSD Documentation Project
++
++     $FreeBSD: head/en_US.ISO8859-1/books/porters-handbook/slow-porting/chapter.xml 50801 2017-09-04 14:50:49Z mat $
++-->
++<chapter xmlns="http://docbook.org/ns/docbook"
++  xmlns:xlink="http://www.w3.org/1999/xlink" version="5.0"
++  xml:id="ph-build-process">
++
++  <title>Build Process and Port Contents</title>
++
++  <sect1 xml:id="build-overview">
++    <title>How FreeBSD Makes Ports</title>
++
++    <para>
++		The FreeBSD ports system uses the make(?) build system and contains pre-created "build targets" for most of the things that you will need to create a port. Build targets are instructions to tell make how to perfrom tasks. These tasks include downloading sources, building the software and installation. Build Targets for the ports system live under the ports tree at /mk. These files also reference the base FreeBSD make files at ?. For those curious about how the specific targets work, the full documentation is available in the source code., please read the <filename>bsd.port.mk</filename> as it is well commented.
++    </para>
++     
++	<note>
++		<para>
++		Sage advice from the previous author:
++		</para>
++    <para>But do not worry, not many people understand exactly how
++      <filename>bsd.port.mk</filename> is working...
++      <!-- smiley --><emphasis>:-)</emphasis>
++     </para>
++    </note>
++
++	<para>
++	First, let us describe the sequence of events which occurs when the
++      user types <command>make</command> for the first time in a given port directory.
++   </para>
++
++
++    <procedure>
++      <step>
++	<para>The <buildtarget>fetch</buildtarget> target is run.  The
++	  <buildtarget>fetch</buildtarget> target is responsible for
++	  making sure that the tarball exists locally in
++	  <varname>DISTDIR</varname>.  If
++	  <buildtarget>fetch</buildtarget> cannot find the required
++	  files in <varname>DISTDIR</varname> it will look up the URL
++	  <varname>MASTER_SITES</varname>, which is set in the
++	  Makefile, as well as our FTP mirrors where we put distfiles
++	  as backup.  It will then attempt to fetch the named
++	  distribution file with <varname>FETCH</varname>, assuming
++	  that the requesting site has direct access to the Internet.
++	  If that succeeds, it will save the file in
++	  <varname>DISTDIR</varname> for future use and
++	  proceed.</para>
++      </step>
++
++      <step>
++	<para>The <buildtarget>extract</buildtarget> target is run.
++	  It looks for the port's distribution file (typically a
++	  <command>gzip</command>ped tarball) in
++	  <varname>DISTDIR</varname> and unpacks it into a temporary
++	  subdirectory specified by <varname>WRKDIR</varname>
++	  (defaults to <filename>work</filename>).</para>
++      </step>
++
++      <step>
++	<para>The <buildtarget>patch</buildtarget> target is run.
++	  First, any patches defined in <varname>PATCHFILES</varname>
++	  are applied.  Second, if any patch files named
++	  <filename>patch-<replaceable>*</replaceable></filename> are
++	  found in <varname>PATCHDIR</varname> (defaults to the
++	  <filename>files</filename> subdirectory), they are applied
++	  at this time in alphabetical order.</para>
++      </step>
++
++      <step>
++	<para>The <buildtarget>configure</buildtarget> target is run.
++	  This can do any one of many different things.</para>
++
++	<orderedlist>
++	  <listitem>
++	    <para>If it exists, <filename>scripts/configure</filename>
++	      is run.</para>
++	  </listitem>
++
++	  <listitem>
++	    <para>If <varname>HAS_CONFIGURE</varname> or
++	      <varname>GNU_CONFIGURE</varname> is set,
++	      <filename>WRKSRC/configure</filename> is run.</para>
++	  </listitem>
++	</orderedlist>
++      </step>
++
++      <step>
++	<para>The <buildtarget>build</buildtarget> target is run.
++	  This is responsible for descending into the port's private
++	  working directory (<varname>WRKSRC</varname>) and building
++	  it.</para>
++      </step>
++
++      <step>
++	<para>The <buildtarget>stage</buildtarget> target is run.
++	  This puts the final set of built files into a temporary
++	  directory (<varname>STAGEDIR</varname>, see
++	  <xref linkend="staging"/>).  The hierarchy of this directory
++	  mirrors that of the system on which the package will be
++	  installed.</para>
++      </step>
++
++      <step>
++	<para>The <buildtarget>package</buildtarget> target is run.
++	  This creates a package using the files from the temporary
++	  directory created during the
++	  <buildtarget>stage</buildtarget> target and the port's
++	  <filename>pkg-plist</filename>.</para>
++      </step>
++
++      <step>
++	<para>The <buildtarget>install</buildtarget> target is run.
++	  This installs the package created during the
++	  <buildtarget>package</buildtarget> target into the host
++	  system.
++	</para>
++      </step>
++    </procedure>
++ 
++
++    <para>If more control over the build process is required, additional <buildtarget>pre-<replaceable>*</replaceable></buildtarget> and <buildtarget>post-<replaceable>*</replaceable></buildtarget> targets can be added to the process
++    either in the Makefile or by creating a script named as above in the <filename>scripts</filename> subdirectory. These targets/scripts will be run prior-to or subsequently-to the named target as the prefix implies.
++    </para>
++      
++    <para>For example, if there is a
++      <buildtarget>post-extract</buildtarget> target defined in the
++      <filename>Makefile</filename>, and a file
++      <filename>pre-build</filename> in the
++      <filename>scripts</filename> subdirectory, the
++      <buildtarget>post-extract</buildtarget> target will be called
++      after the regular extraction actions, and
++      <filename>pre-build</filename> will be executed before
++      the default build rules are done.  It is recommended to
++      use <filename>Makefile</filename> targets if the actions are
++      simple enough, because it will be easier for someone to figure
++      out what kind of non-default action the port requires.
++    </para>
++
++    <para>The default actions are done by the
++      <buildtarget>do-<replaceable>something</replaceable></buildtarget>
++      targets from <filename>bsd.port.mk</filename>.
++      For example, the commands to extract a port are in the target
++      <buildtarget>do-extract</buildtarget>.  If
++      the default target does not do the job right, redefine the
++      <buildtarget>do-<replaceable>something</replaceable></buildtarget>
++      target in the <filename>Makefile</filename>.
++    </para>
++
++<note>
++<para>
++*Authors Note: This is messed. Should we really be talking about modifying bsd.ports.mk here?
++</para>
++</note>
++
++    <note>
++		
++		<para>
++			Never modify the <quote>main</quote> targets (for example,
++			<buildtarget>extract</buildtarget>,
++			<buildtarget>configure</buildtarget>, etc.). These targets are groupings 
++			that make sure all prior stages are completed and then
++			call the real targets or scripts. If there is an issue in the extraction process, fix
++			<buildtarget>do-extract</buildtarget>, but never ever change
++			the way <buildtarget>extract</buildtarget> operates!
++			Additionally, the target
++			<buildtarget>post-deinstall</buildtarget> is invalid and is
++			not run by the ports infrastructure.
++		</para>
++    </note>
++
++    <para>
++		Now that what goes on when the user types <command>make
++		install</command> is better understood, let us go through the
++      recommended steps to create the perfect port.
++     </para>
++
++  </sect1>
++  
++
++  <sect1 xml:id="ph-basic-files">
++    <title>Basic port structure</title>
++<para>
++A port is a directory of source files that contains all the information the ports build system needs to generate a new executable on FreeBSD. A typical port is structured as follows:
++pkg-descr 
++pkg-plist
++checksum
++/files
++Makefile
++</para>
++</sect1>
++
++  <sect1 xml:id="ph-descriptions">
++    <title>Writing the Description Files</title>
++
++    <para>There are two description files that are required for
++      any port, whether they actually package or not.  They are
++      <filename>pkg-descr</filename> and
++      <filename>pkg-plist</filename>.  Their
++      <filename>pkg-</filename> prefix distinguishes them from other
++      files.
++    </para>
++
++    <sect2 xml:id="ph-description-file">
++      <title><filename>pkg-descr</filename></title>
++
++      <para>This is a longer description of the port.  One to a few
++	paragraphs concisely explaining what the port does is
++	sufficient.</para>
++
++      <note>
++	<para>This is <emphasis>not</emphasis> a manual or an
++	  in-depth description on how to use or compile the port!
++	  <emphasis>Please be careful when copying from the
++	  <filename>README</filename> or manpage</emphasis>.  Too
++	  often they are not a concise description of the port or
++	  are in an awkward format.  For example, manpages have
++	  justified spacing, which looks particularly bad with
++	  monospaced fonts.</para>
++
++	<para>On the other hand, the content of
++	  <filename>pkg-descr</filename> must be longer than the <link
++	    linkend="makefile-comment"><varname>COMMENT</varname></link>
++	  line from the Makefile.  It must explain in more depth what
++	  the port is all about.</para>
++      </note>
++
++      <para>A well-written <filename>pkg-descr</filename> describes
++	the port completely enough that users would not have to
++	consult the documentation or visit the website to understand
++	what the software does, how it can be useful, or what
++	particularly nice features it has.  Mentioning certain
++	requirements like a graphical toolkit, heavy dependencies,
++	runtime environment, or implementation languages help users
++	decide whether this port will work for them.</para>
++
++      <para>Include a URL to the official WWW homepage.  Prepend
++	<emphasis>one</emphasis> of the websites (pick the most
++	common one) with <literal>WWW:</literal> (followed by single
++	space) so that automated tools will work correctly.  If the
++	URI is the root of the website or directory, it must be
++	terminated with a slash.</para>
++
++      <note>
++	<para>If the listed webpage for a port is not available, try
++	  to search the Internet first to see if the official site
++	  moved, was renamed, or is hosted elsewhere.</para>
++      </note>
++
++      <para>This example shows how
++	<filename>pkg-descr</filename> looks:</para>
++
++      <programlisting>This is a port of oneko, in which a cat chases a poor mouse all over
++the screen.
++ :
++(etc.)
++
++WWW: http://www.oneko.org/</programlisting>
++    </sect2>
++
++    <sect2 xml:id="ph-plist-file">
++      <title><filename>pkg-plist</filename></title>
++
++      <para>This file lists all the files installed by the port.  It
++	is also called the <quote>packing list</quote> because the
++	package is generated by packing the files listed here.  The
++	pathnames are relative to the installation prefix (usually
++	<filename>/usr/local</filename>).</para>
++
++      <para>Here is a small example:</para>
++
++      <programlisting>bin/oneko
++man/man1/oneko.1.gz
++lib/X11/app-defaults/Oneko
++lib/X11/oneko/cat1.xpm
++lib/X11/oneko/cat2.xpm
++lib/X11/oneko/mouse.xpm</programlisting>
++
++      <para>Refer to the &man.pkg-create.8; manual page for details
++	on the packing list.</para>
++
++      <note>
++	<para>It is recommended to keep all the filenames in
++	  this file sorted alphabetically.  It will make verifying
++	  changes when upgrading the port much easier.</para>
++      </note>
++
++      <tip>
++	<para>Creating a packing list manually can be a very tedious
++	  task.  If the port installs a large numbers of files,
++	  <link linkend="plist-autoplist">creating the packing list
++	    automatically</link> might save time.</para>
++      </tip>
++
++      <para>There is only one case when
++	<filename>pkg-plist</filename> can be omitted from a port.
++	If the port installs just a handful of files, list them in
++	<varname>PLIST_FILES</varname>, within the
++	port's <filename>Makefile</filename>.  For instance, we
++	could get along without <filename>pkg-plist</filename> in
++	the above <filename>oneko</filename> port by adding these
++	lines to the <filename>Makefile</filename>:</para>
++
++      <programlisting>PLIST_FILES=	bin/oneko \
++		man/man1/oneko.1.gz \
++		lib/X11/app-defaults/Oneko \
++		lib/X11/oneko/cat1.xpm \
++		lib/X11/oneko/cat2.xpm \
++		lib/X11/oneko/mouse.xpm</programlisting>
++
++      <note>
++	<para>Usage of <varname>PLIST_FILES</varname> should not be
++	  abused.  When looking for the origin of a file, people
++	  usually try to <application>grep</application> through the
++	  <filename>pkg-plist</filename> files in the ports tree.
++	  Listing files in <varname>PLIST_FILES</varname> in the
++	  <filename>Makefile</filename> makes that search more
++	  difficult.</para>
++      </note>
++
++      <tip>
++	<para>If a port needs to create an empty directory, or creates
++	  directories outside of <filename>${PREFIX}</filename> during
++	  installation, refer to <xref linkend="plist-dir-cleaning"/>
++	  for more information.</para>
++      </tip>
++
++      <para>The price for this way of listing a port's files and
++	directories is that the keywords described in
++	&man.pkg-create.8; and <xref linkend="plist-keywords"/> cannot
++	be used.  Therefore, it is suitable
++	only for simple ports and makes them even simpler.  At the
++	same time, it has the advantage of reducing the number of
++	files in the ports collection.  Please consider using this
++	technique before resorting to
++	<filename>pkg-plist</filename>.</para>
++
++      <para>Later we will see how <filename>pkg-plist</filename>
++	and <varname>PLIST_FILES</varname> can be used to fulfill
++	<link linkend="plist">more sophisticated
++	  tasks</link>.</para>
++    </sect2>
++
++  
++  <sect2 xml:id="ph-checksum-file">
++    <title>The checksum File</title>
++  <para>
++	The checksum file contains a number based on a calculation of all the files within the port. This number is used as a tool to verify the contents to ensure the expected files are present. While not a perfect mechanism, it is accurate enough to fulfill the roll of validation but not necessarily tampering protection. Checksum files are created by running the make checksum command within the port folder. 
++  </para>
++</sect2>
++
++  <sect2 xml:id="ph-files-dir">
++    <title>The Files directory</title>
++  <para>
++	The files directory contains the patch files used to update the original sources to allow the system to run on FreeBSD. There are other reasons to create and include patch files but for the sake of this section, "patching the original sources" is an adequate description. The files contained in this directory are "required" to be generated by the make patch target. However, this is a software requirement and manual patching is still an option. 
++  </para>
++</sect2>
++
++ <sect2 xml:id="ph-makefile">
++    <title>The <filename>Makefile</filename></title>
++    <para>
++The Makefile is the entrypoint for the ports system to build the binary package. This makefile is NOT the target application makefile. Rather, this makefile is a meta-package that contains the FreeBSD instructions outlined in the first section of this chapter. This file can contain very complex instructions, but typically includes variabled for:
++- The port name
++- The port version
++- Port "meta info" (information about the port)
++- Master sources site
++- Source code version to retrieve
++- Additional build instructions
++- Additional make targets
++</para>
++    <para>The minimal <filename>Makefile</filename> would look
++      something like this:</para>
++
++    <programlisting># &dollar;FreeBSD&dollar;
++
++PORTNAME=	oneko
++DISTVERSION=	1.1b
++CATEGORIES=	games
++MASTER_SITES=	ftp://ftp.cs.columbia.edu/archives/X11R5/contrib/
++
++MAINTAINER=	youremail@example.com
++COMMENT=	Cat chasing a mouse all over the screen
++
++.include &lt;bsd.port.mk&gt;</programlisting>
++
++    <note>
++      <para>In some cases, the <filename>Makefile</filename> of an
++	existing port may contain additional lines in the header,
++	such as the name of the port and the date it was created.
++	This additional information has been declared obsolete, and
++	is being phased out.</para>
++    </note>
++
++    <para>Try to figure it out.  Do not worry about the
++      contents of the <literal>&dollar;FreeBSD&dollar;</literal>
++      line, it will be filled in automatically by
++      <application>Subversion</application> when the port is
++      imported to our main ports tree.  A more detailed
++      example is shown in the
++      <link linkend="porting-samplem">sample Makefile</link>
++      section.</para>
++  
++	<para>
++		This section is by no means a complete reference to porting. This is intended to give the reader enough information to understand what a port looks like and how the system works. Once again, it is recommended that those seeking more information on the build process and the file contents review the build target information in the bsd.ports.mk file. Now, let us look at the steps to maintain a port.
++	</para>
++	</sect2>
++</sect1>
++</chapter>
+Index: ph-introduction/Makefile
+===================================================================
+--- ph-introduction/Makefile	(nonexistent)
++++ ph-introduction/Makefile	(working copy)
+@@ -0,0 +1,15 @@
++#
++# Build the Porters Handbook with just the content from this chapter.
++#
++# $FreeBSD: head/en_US.ISO8859-1/books/porters-handbook/porting-why/Makefile 43840 2014-02-09 01:50:53Z trhodes $
++#
++
++CHAPTERS= 	ph-introduction/chapter.xml
++
++VPATH=		..
++
++MASTERDOC=	${.CURDIR}/../${DOC}.${DOCBOOKSUFFIX}
++
++DOC_PREFIX?= 	${.CURDIR}/../../../..
++
++.include "../Makefile"
+Index: ph-introduction/chapter.xml
+===================================================================
+--- ph-introduction/chapter.xml	(nonexistent)
++++ ph-introduction/chapter.xml	(working copy)
+@@ -0,0 +1,91 @@
++<?xml version="1.0" encoding="iso-8859-1"?>
++<!--
++     The FreeBSD Documentation Project
++
++     $FreeBSD: head/en_US.ISO8859-1/books/porters-handbook/porting-why/chapter.xml 50632 2017-08-04 11:34:16Z mat $
++-->
++<chapter xmlns="http://docbook.org/ns/docbook"
++  xmlns:xlink="http://www.w3.org/1999/xlink" version="5.0"
++  xml:id="ph-introduction">
++
++  <title>Introduction</title>
++
++  <para>The FreeBSD ports system is a combination of tools and source files designed to build and install applications on FreeBSD. While any user is free to download and build the sources themselves, some applications do not target FreeBSD (shocking!). Applications that do not target FreeBSD require minor modifications to enable them to work correctly. These modifications are known as patches.  The ports system allows users to package these patches and distribute them with the correct build instructions, thus allowing other users to duplicate the fixes and run the application. 
++
++The Ports system is a fundamental part of FreeBSD. All binary installations performed by the pkg[*] system pull applications from repositories built with ports (see POUDRIERE(8)). Amazingly, all the port packages are maintained by the user base themselves. Users decide which applications they want included in the ports system and provide a port to share their user experience. It is also users that monitor the upstream application repositories (i.e. the people that created the software) and create fixes to keep the Ports system up to date. 
++
++This handbook is designed to explain how the Ports system works at an intermediate level to advanced level, and how you can help contribute to the maintenance of this fundamental system on FreeBSD. 
++
++    The Ports Collection appeared in FreeBSD 1.0.  It has since spread  to
++     NetBSD and OpenBSD.
++
++Background tools 
++
++This handbook requires basic working knowledge of the Ports tools. For more information about the Ports system, please see: 
++https://www.freebsd.org/doc/en_US.ISO8859-1/books/handbook/ports.html
++and 
++https://www.freebsd.org/cgi/man.cgi?ports
++
++A complete list of ports is available on the FreeBSD website at
++
++https://www.freebsd.org/ports/index.html
++
++More detailed information about the state of various ports can be found through the excellent freshports.org website (The search is in the right hand column halfway down the page):
++
++https://www.freshports.org/
++
++Freshports also provides a view into the building and maintenance of all ports for all Architectures[1] through access to the PortsMon. The PortsMon system plugs into the overall Release Engineering structure to provide notification of build failures and ensure the software is available. To see an example of a port and it's RE information, find a port in freshports and click on the PortsMon link.
++
++Development Tools 
++
++In order to create or maintain a "port", there are tools the user should be familiar. 
++
++Ports Tree - https://svnweb.freebsd.org/ports/head/
++
++The ports tree is the directory structure of build tools and build instructions (source files) that are used to create the binaries on the target computer. 
++
++Subversion - https://subversion.apache.org/
++
++While any user with wheel privilege is able to modify the ports files under /usr/loca/ports,  this pattern creates complications. If any user on the computer performs a portsnap update, all modifications will be lost. Also, updating these files requires wheel privilege. Performing development using elevated privilege can be both frustrating and dangerous. It is therefore recommended that users download a "development" copy of the ports tree using subversion. This alternate tree can be placed under the users home directory, which gives the user write privileges and differentiates the "base" ports and a users working copies.
++
++Information about how to use subversion with FreeBSD is available here:
++
++https://www.freebsd.org/doc/en_US.ISO8859-1/books/handbook/svn.html
++
++With more detailed instructions at http://svnbook.red-bean.com/
++
++Getting the Ports Tree Through Subversion
++The typical user will want to checkout the latest ports tree. 
++
++#Install subversion
++sudo pkg install subversion
++...
++#Create structure. 
++#The work folder gives you a place to collect /scripts and /notes directories applicable to your changes and your ports tree.
++mkdir -p ~/work/ports
++cd ~/work/ports 
++svn svn://svn.freebsd.org/ports/head/ .
++
++Bugzilla  - http://bugs.freebsd.org
++Bugzilla is the bug tracker used by FreeBSD to keep a master list of issues and tasks pertaining to the maintenance and development of FreeBSD. Users that have issues in the functionality of FreeBSD are encouraged to search the bug list for similar problems. While general internet searches can typically find answers to simple problems,  deeper technical problems may have already been identified. If the issue is not in the list, users are encouraged to create a new account and create a bug entry. Duplicates are quickly identified and support can many times be offered. 
++
++Bugzilla is the tool you will use to make sure your port is working correctly, or look for other ports that you are interested in that may need work. If a port is un-maintained, bugzilla is the place to go to volunteer to maintain the package. 
++
++
++Phabricator - https://reviews.freebsd.org/
++Phabricator is a code review tool that has been integrated into the FreeBSD release process to streamline community review and help nurture new developers. FreeBSD users are encouraged (lots of encouragement!) to create an account and observe the development/review/development process that takes place to ensure the quality of the software released. This iterative feedback process is your gateway to getting your port update submitted, and to give you the skills to eventually become a full maintainer with a "Ports Commit Bit". [*]
++
++Example Development Process
++
++An example of how a typical port might be maintained would look like this: 
++
++Suppose you were using the Lua scripting language and came across a bug on FreeBSD. After doing some research, you noted that the bug has been patched by the upstream maintainer (i.e. the authors) but the port does not seem to contain the fix. 
++
++Your first stop would be bugs.freebsd.org to search to see if someone else has reported the problem. Depending on the circumstance, there may be some discussions, or perhaps the port doesn't seem to be maintained. After said discussion on the forum, you decide that the patch (and Lua) is important to you and you want others to share your work. Perhaps you discussed it with the port maintainer, and that person asked you to put together a patch. Or perhaps the port is currently un-maintained. Either way, you decide to update the port. 
++
++After some simple modifications and proper verification using the tools provided, you will have a patch file. This patch file is then submitted through reviews.freebsd.org with a brief written overview of what you have done and why. One or more people will review the patch files and then make comments asking you to make some changes/fixes. Once those changes are in place and everyone is satisfied, the patch is committed to the head revision and is now available after a user updates the ports tree using "ports update".  
++
++That's it, you've maintained a Port!
++
++The next section will describe how the ports system builds the application, what a basic (new) port would look like, and the steps you will take to make changes to a port. Happy Porting!</para>
++</chapter>
+Index: ph-working-with-files/Makefile
+===================================================================
+--- ph-working-with-files/Makefile	(nonexistent)
++++ ph-working-with-files/Makefile	(working copy)
+@@ -0,0 +1,15 @@
++#
++# Build the Porters Handbook with just the content from this chapter.
++#
++# $FreeBSD: head/en_US.ISO8859-1/books/porters-handbook/porting-why/Makefile 43840 2014-02-09 01:50:53Z trhodes $
++#
++
++CHAPTERS= 	ph-working-with-files/chapter.xml
++
++VPATH=		..
++
++MASTERDOC=	${.CURDIR}/../${DOC}.${DOCBOOKSUFFIX}
++
++DOC_PREFIX?= 	${.CURDIR}/../../../..
++
++.include "../Makefile"
+Index: ph-working-with-files/chapter.xml
+===================================================================
+--- ph-working-with-files/chapter.xml	(nonexistent)
++++ ph-working-with-files/chapter.xml	(working copy)
+@@ -0,0 +1,160 @@
++<?xml version="1.0" encoding="iso-8859-1"?>
++<!--
++     The FreeBSD Documentation Project
++
++     $FreeBSD: head/en_US.ISO8859-1/books/porters-handbook/porting-why/chapter.xml 50632 2017-08-04 11:34:16Z mat $
++-->
++<chapter xmlns="http://docbook.org/ns/docbook"
++  xmlns:xlink="http://www.w3.org/1999/xlink" version="5.0"
++  xml:id="ph-working-with-files">
++
++  <title>Working With Files</title>
++
++    <sect1 xml:id="ph-patching">
++    <title>Using the Built In Patching Tools</title>
++
++	<para>
++	Creating a new port involves generating the port files from scratch or copying an existing, similar port. Maintaining a port involves retrieving the latest revisions of the sources, making changes to those sources, and then extracting those changes as a "meta-patch" for the port. The following sections describe the steps involved in maintaining a patch file, with notes to new port maintainers.
++	</para>
++
++	<sect2 xml:id="ph-work-dir">
++		<title>The Work Directory</title>
++		<para>
++			The work directory is created under the port directory and is used to store "working data". Working data consists of the source files downloaded from the upstream repository, inetermediate build output, as well as the build output itself that can be tested and installed. Source files are downloaded and unpacked to this directory and optionally patched depending on the target. This directory is where you will be performing the majority of your changes to the upstream source files. By using the built in mechanisms and directory structures, you ensure that the tools available can assist in streamlining the update process.
++		</para>
++	</sect2>
++
++	<sect2 xml:id="working-with-makepatch">
++
++		<para>
++		The ports framework provides a <buildtarget>makepatch</buildtarget>
++		target, which when run,
++		automatically creates correctly named and formatted patch files in the
++		correct location from the modified sources. Here are the steps to maintain a port
++		</para>
++
++		<procedure>
++			<step>
++		<para>
++		First, retrieve the source files and optionally apply patches.
++	
++		If you wish to preserve or update the existing patches in the port, use the <buildtarget>patch</buildtarget> target. This target retrieves sources and applies all patches in the
++		<filename>files</filename> directory.
++	</para>
++	<para>
++		If you wish to discard the current patches use the
++		<buildtarget>extract</buildtarget> target. This target will only
++		retreive and extract the sources.
++	</para>
++
++	<note>
++		<para>
++		If you chose to run <buildtarget>extract</buildtarget> and then
++		decide afterwards that you do want to use the patches,
++		the best way forward is to ?
++		</para>	
++	</note>
++
++	<note>
++		<para>
++		New port note:
++		You will need to generate a minimum port structure and Makefile that downloads the sources before you can execute these steps.
++		</para>
++	</note>
++</step>
++<step>
++	<screen>
++	&prompt.user; <userinput>cd port-dir</userinput>
++	&prompt.user; <userinput>make patch</userinput>
++	&prompt.user; <userinput>cd work/src-dir</userinput>
++	</screen>
++
++	<para>
++		Prior to making changes to the sources files, manually copy the files and add an *.orig extension.
++		This preserves the original file and allows the system to <command>diff</command> your changes and produce a new port patch.
++	</para>
++	<screen>
++		&prompt.user; <userinput>cp file.ext file.ext.orig</userinput>
++	</screen>
++	<para>
++		*Authors note. I had this work successfully without having done that. I built the patch, made my changes, then ran make makepatch and it worked?
++	</para>
++
++	<para>
++		Again, Repeat the above steps for each file at any location within <varname>WRKSRC</varname>
++		that needs a patch file created.
++	</para>
++</step>
++<step>
++	<para>
++		Once your changes are complete, return to the main port directory:
++	</para>
++	<screen>
++		&prompt.user; <userinput>cd port-dir</userinput>
++	</screen>
++
++</step>
++<step>
++	<para>
++		*** make checksum, portlink, ?
++		</para>
++</step>
++<step>
++
++	<para>
++		Finally, run the <buildtarget>makepatch</buildtarget> target. 
++	</para>
++
++	<screen>
++		&prompt.user; <userinput>make makepatch</userinput>
++	</screen>
++
++	<para>
++		The makepatch target recursively searches <varname>WRKSRC</varname> for  <filename>file</filename>/<filename>file.orig</filename>
++		pairs within <varname>WRKSRC</varname>, and creates a patch file in <varname>PATCHDIR</varname> from each pair
++		(using diff).
++	</para>
++
++	<note>
++		<para>
++		Any pre-existing patches in <varname>PATCHDIR</varname> that are *not* regenerated
++		during the above process are placed in a backup location in WRKDIR. This
++		backup location is deleted on <buildtarget>clean</buildtarget>. This may occur when not
++		using <buildtarget>patch</buildtarget> to extract the sources, because existing patches
++		are or were not applied, or if there are existing patch files that make
++		edits to multiple files in a single patch file, which will now be in
++		separate patch files after makepatch regeneration. Inspect and review
++		the patch files in <varname>PATCHDIR</varname> to ensure they have been created as expected.
++		</para>
++	</note>
++	<note>
++<para>
++	+ Patch files are stored in <varname>PATCHDIR</varname>, by default <filename>files</filename> in the port
++	directory, which are automatically applied in the <buildtarget>patch</buildtarget> stage
++</para>
++	</note>
++	</step>
++	</procedure>
++
++	</sect2>
++</sect1>
++
++    <sect1 xml:id="ph-submitting">
++<title>Submitting a patch</title>
++
++<para>
++The FreeBSD phabrictor review board is the place to submit patches. To submit a patch, create an account and log in. Navigate to Applications -> Code Review. Click the Create Diff file and submit the file generate by makepatch. At this point, others will review and comment on your work. If you are persistent, your patch will be accepted.
++</para>
++<para>
++Submitting a patch to a maintainer can be a very daunting task. The mental barrier of "will my patch be rejected?" or "My work isn't good enough" keeps people from moving forward with both an instance of work, and their skills as a developer.
++</para>
++<para>
++Will my patch be rejected? Probably. In fact, people would not be doing their job if they just accepted your patches. There will be comments and requests to make changes you didn't consider (and may not really want to make), and prehaps roadblocks that you can't seem to get over. Make no mistake, this is a normal part of the process of develop/test/report/develop. The people commenting on your work *want* you to be successful and are using their time to help you. If you accept their help and be persistent, you can become a better developer and FreeBSD gains another active port maintainer. :)
++</para>
++<para>
++My Work isn't Good Enough. Probably. Creating a patch file that will work consistently across all instances of FreeBSD is a very difficult task. The whole point of submitting your work for review is to allow experienced people to help.
++</para>
++</sect1>
++
++</chapter>
++
